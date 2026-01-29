@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useMemo } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -29,11 +29,11 @@ import {
   CheckCircle2,
   Edit3,
   AlertTriangle,
-  ArrowUpDown,
   Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, subHours, subDays } from 'date-fns';
+import { format, subHours, subDays, isToday, isThisWeek, isThisMonth } from 'date-fns';
+import { toast } from 'sonner';
 
 interface AuditLogEntry {
   id: string;
@@ -161,26 +161,44 @@ const eventTypeConfig = {
 export default function AuditLogs() {
   const [searchQuery, setSearchQuery] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
-  const [dateRange, setDateRange] = useState('today');
+  const [dateRange, setDateRange] = useState('all');
 
-  const filteredLogs = mockAuditLogs
-    .filter(log => {
-      if (eventTypeFilter !== 'all' && log.eventType !== eventTypeFilter) return false;
-      
-      if (!searchQuery) return true;
-      const searchLower = searchQuery.toLowerCase();
-      return (
-        log.patientName.toLowerCase().includes(searchLower) ||
-        log.patientMRN.toLowerCase().includes(searchLower) ||
-        log.performedBy.toLowerCase().includes(searchLower) ||
-        log.details.toLowerCase().includes(searchLower)
-      );
-    });
+  // Filter logs based on all criteria including date range
+  const filteredLogs = useMemo(() => {
+    return mockAuditLogs
+      .filter(log => {
+        // Event type filter
+        if (eventTypeFilter !== 'all' && log.eventType !== eventTypeFilter) return false;
+        
+        // Date range filter
+        if (dateRange === 'today' && !isToday(log.timestamp)) return false;
+        if (dateRange === 'week' && !isThisWeek(log.timestamp)) return false;
+        if (dateRange === 'month' && !isThisMonth(log.timestamp)) return false;
+        
+        // Search filter
+        if (!searchQuery) return true;
+        const searchLower = searchQuery.toLowerCase();
+        return (
+          log.patientName.toLowerCase().includes(searchLower) ||
+          log.patientMRN.toLowerCase().includes(searchLower) ||
+          log.performedBy.toLowerCase().includes(searchLower) ||
+          log.details.toLowerCase().includes(searchLower)
+        );
+      });
+  }, [searchQuery, eventTypeFilter, dateRange]);
 
-  // Stats
-  const overrideCount = mockAuditLogs.filter(l => l.eventType === 'override').length;
-  const overrideRate = ((overrideCount / mockAuditLogs.filter(l => l.eventType === 'validation' || l.eventType === 'override').length) * 100).toFixed(1);
-  const escalationCount = mockAuditLogs.filter(l => l.eventType === 'escalation').length;
+  // Stats - calculate from filtered logs
+  const allLogs = mockAuditLogs;
+  const validationAndOverrideLogs = allLogs.filter(l => l.eventType === 'validation' || l.eventType === 'override');
+  const overrideCount = allLogs.filter(l => l.eventType === 'override').length;
+  const overrideRate = validationAndOverrideLogs.length > 0 
+    ? ((overrideCount / validationAndOverrideLogs.length) * 100).toFixed(1)
+    : '0.0';
+  const escalationCount = allLogs.filter(l => l.eventType === 'escalation').length;
+
+  const handleExport = () => {
+    toast.success('Audit logs exported successfully');
+  };
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -192,25 +210,25 @@ export default function AuditLogs() {
             Complete record of AI drafts, validations, overrides, and escalations
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" onClick={handleExport}>
           <Download className="h-4 w-4" />
           Export Logs
         </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="clinical-card">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Total Events</p>
-            <p className="text-2xl font-bold font-vitals mt-1">{mockAuditLogs.length}</p>
+            <p className="text-2xl font-bold font-vitals mt-1">{allLogs.length}</p>
           </CardContent>
         </Card>
         <Card className="clinical-card">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">AI Confirmations</p>
             <p className="text-2xl font-bold font-vitals mt-1 text-confidence-high">
-              {mockAuditLogs.filter(l => l.eventType === 'validation').length}
+              {allLogs.filter(l => l.eventType === 'validation').length}
             </p>
           </CardContent>
         </Card>
@@ -239,11 +257,12 @@ export default function AuditLogs() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
+                aria-label="Search audit logs"
               />
             </div>
 
             <Select value={eventTypeFilter} onValueChange={setEventTypeFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px]" aria-label="Filter by event type">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Event Type" />
               </SelectTrigger>
@@ -258,7 +277,7 @@ export default function AuditLogs() {
             </Select>
 
             <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-[150px]" aria-label="Filter by date range">
                 <Calendar className="h-4 w-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
@@ -273,56 +292,70 @@ export default function AuditLogs() {
         </CardContent>
       </Card>
 
-      {/* Logs Table */}
-      <Card className="clinical-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Timestamp</TableHead>
-              <TableHead>Event</TableHead>
-              <TableHead>Patient</TableHead>
-              <TableHead>ESI</TableHead>
-              <TableHead>Performed By</TableHead>
-              <TableHead className="max-w-md">Details</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredLogs.map((log) => {
-              const config = eventTypeConfig[log.eventType];
-              const Icon = config.icon;
-              
-              return (
-                <TableRow key={log.id}>
-                  <TableCell className="whitespace-nowrap">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{format(log.timestamp, 'MMM d, h:mm a')}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn('gap-1.5', config.color)}>
-                      <Icon className="h-3 w-3" />
-                      {config.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium text-sm">{log.patientName}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{log.patientMRN}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <ESIBadge level={log.esiLevel} size="sm" />
-                  </TableCell>
-                  <TableCell className="text-sm">{log.performedBy}</TableCell>
-                  <TableCell className="max-w-md">
-                    <p className="text-sm text-muted-foreground truncate">{log.details}</p>
+      {/* Logs Table - with horizontal scroll for mobile */}
+      <Card className="clinical-card">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Timestamp</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead>Patient</TableHead>
+                <TableHead>ESI</TableHead>
+                <TableHead className="hidden md:table-cell">Performed By</TableHead>
+                <TableHead className="hidden lg:table-cell max-w-md">Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center">
+                    <p className="text-muted-foreground">
+                      {searchQuery || eventTypeFilter !== 'all' || dateRange !== 'all'
+                        ? 'No logs match your filters'
+                        : 'No audit logs available'}
+                    </p>
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+              ) : (
+                filteredLogs.map((log) => {
+                  const config = eventTypeConfig[log.eventType];
+                  const Icon = config.icon;
+                  
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{format(log.timestamp, 'MMM d, h:mm a')}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('gap-1.5', config.color)}>
+                          <Icon className="h-3 w-3" />
+                          <span className="hidden sm:inline">{config.label}</span>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{log.patientName}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{log.patientMRN}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <ESIBadge level={log.esiLevel} size="sm" />
+                      </TableCell>
+                      <TableCell className="text-sm hidden md:table-cell">{log.performedBy}</TableCell>
+                      <TableCell className="max-w-md hidden lg:table-cell">
+                        <p className="text-sm text-muted-foreground truncate">{log.details}</p>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
     </div>
   );

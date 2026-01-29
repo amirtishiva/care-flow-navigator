@@ -24,10 +24,10 @@ import { ESIBadge, ESILevelSelector } from '@/components/triage/ESIBadge';
 import { VitalsDisplay } from '@/components/triage/VitalsDisplay';
 import { SBARDisplay } from '@/components/triage/SBARDisplay';
 import { ConfidenceIndicator } from '@/components/triage/ConfidenceIndicator';
+import { useEmergency } from '@/contexts/EmergencyContext';
 import { mockPatients, generateAITriageResult } from '@/data/mockData';
 import { 
   ESILevel, 
-  Patient, 
   AITriageResult, 
   OverrideRationale, 
   OVERRIDE_RATIONALE_LABELS,
@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils';
 export default function TriageScreen() {
   const navigate = useNavigate();
   const { patientId } = useParams();
+  const { activateEmergencyMode, deactivateEmergencyMode, checkCriticalState } = useEmergency();
   
   // Find patient - use first in-triage patient as fallback
   const patient = patientId === 'new-patient' 
@@ -72,10 +73,27 @@ export default function TriageScreen() {
       setAIResult(result);
       setSelectedESI(result.draftESI);
       setIsAnalyzing(false);
+      
+      // Activate emergency mode for critical patients
+      if (checkCriticalState(result.draftESI)) {
+        activateEmergencyMode(patient.id);
+      }
     }, 2500);
 
-    return () => clearTimeout(timer);
-  }, [patient]);
+    return () => {
+      clearTimeout(timer);
+      deactivateEmergencyMode();
+    };
+  }, [patient, activateEmergencyMode, deactivateEmergencyMode, checkCriticalState]);
+
+  // Update emergency state when ESI changes
+  useEffect(() => {
+    if (selectedESI && checkCriticalState(selectedESI)) {
+      activateEmergencyMode(patient.id);
+    } else {
+      deactivateEmergencyMode();
+    }
+  }, [selectedESI, patient.id, activateEmergencyMode, deactivateEmergencyMode, checkCriticalState]);
 
   const handleESIChange = (level: ESILevel) => {
     setSelectedESI(level);
@@ -102,6 +120,7 @@ export default function TriageScreen() {
     setTimeout(() => {
       setIsSubmitting(false);
       setShowConfirmDialog(false);
+      deactivateEmergencyMode();
       navigate('/queue');
     }, 1500);
   };
@@ -114,12 +133,19 @@ export default function TriageScreen() {
     );
   }
 
+  const isCritical = selectedESI ? checkCriticalState(selectedESI) : false;
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -136,13 +162,27 @@ export default function TriageScreen() {
         </div>
       </div>
 
+      {/* Critical Alert Banner */}
+      {isCritical && !isAnalyzing && (
+        <div className="alert-banner-critical pulse-critical">
+          <AlertTriangle className="h-6 w-6" />
+          <div className="flex-1">
+            <p className="font-semibold">Critical Patient - ESI Level {selectedESI}</p>
+            <p className="text-sm opacity-80">Immediate intervention required. Case will be routed to code team upon confirmation.</p>
+          </div>
+        </div>
+      )}
+
       {/* Patient Header */}
-      <Card className="clinical-card">
+      <Card className={cn("clinical-card", isCritical && "border-[hsl(var(--esi-1-border))]")}>
         <CardContent className="p-4">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-7 w-7 text-primary" />
+              <div className={cn(
+                "h-14 w-14 rounded-full flex items-center justify-center",
+                isCritical ? "bg-esi-1/20" : "bg-primary/10"
+              )}>
+                <User className={cn("h-7 w-7", isCritical ? "text-esi-1" : "text-primary")} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -175,7 +215,10 @@ export default function TriageScreen() {
           </div>
 
           {/* Chief Complaint */}
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+          <div className={cn(
+            "mt-4 p-3 rounded-lg",
+            isCritical ? "bg-esi-1-bg border border-[hsl(var(--esi-1-border))]" : "bg-muted/50"
+          )}>
             <p className="text-sm">
               <span className="font-semibold">Chief Complaint: </span>
               {patient.chiefComplaint}
@@ -216,12 +259,12 @@ export default function TriageScreen() {
           {/* AI Draft ESI */}
           <Card className={cn(
             'clinical-card border-2',
-            aiResult.draftESI <= 2 && 'border-esi-2/50',
+            isCritical ? 'border-esi-1/50' : aiResult.draftESI <= 2 ? 'border-esi-2/50' : 'border-border',
           )}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-primary" />
+                  <Bot className={cn("h-5 w-5", isCritical ? "text-esi-1" : "text-primary")} />
                   AI Draft Assessment
                 </CardTitle>
                 <Badge variant="secondary" className="gap-1">
@@ -235,7 +278,10 @@ export default function TriageScreen() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Draft ESI Display */}
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+              <div className={cn(
+                "flex items-center justify-between p-4 rounded-lg",
+                isCritical ? "bg-esi-1-bg" : "bg-muted/30"
+              )}>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Suggested ESI Level</p>
                   <div className="flex items-center gap-3">
@@ -305,10 +351,13 @@ export default function TriageScreen() {
 
       {/* Validation Section */}
       {!isAnalyzing && aiResult && selectedESI && (
-        <Card className="clinical-card border-2 border-primary/20">
+        <Card className={cn(
+          "clinical-card border-2",
+          isCritical ? "border-esi-1/40" : "border-primary/20"
+        )}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <CheckCircle2 className={cn("h-5 w-5", isCritical ? "text-esi-1" : "text-primary")} />
               Nurse Validation
             </CardTitle>
             <CardDescription>
@@ -331,12 +380,12 @@ export default function TriageScreen() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label>Reason for Override</Label>
+                  <Label htmlFor="override-rationale">Reason for Override</Label>
                   <Select 
                     value={overrideRationale} 
                     onValueChange={(v) => setOverrideRationale(v as OverrideRationale)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="override-rationale">
                       <SelectValue placeholder="Select a rationale..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -348,8 +397,9 @@ export default function TriageScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Additional Notes (Optional)</Label>
+                  <Label htmlFor="override-notes">Additional Notes (Optional)</Label>
                   <Textarea
+                    id="override-notes"
                     value={overrideNotes}
                     onChange={(e) => setOverrideNotes(e.target.value)}
                     placeholder="Add any relevant clinical observations..."
@@ -368,7 +418,7 @@ export default function TriageScreen() {
                 onClick={handleConfirm}
                 disabled={isOverriding && !overrideRationale}
                 size="lg"
-                className="gap-2"
+                className={cn("gap-2", isCritical && "bg-esi-1 hover:bg-esi-1/90")}
               >
                 <CheckCircle2 className="h-4 w-4" />
                 {isOverriding ? 'Override & Confirm' : 'Confirm ESI Level'}
@@ -380,7 +430,7 @@ export default function TriageScreen() {
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Confirm Triage Assessment</DialogTitle>
             <DialogDescription>
@@ -389,7 +439,10 @@ export default function TriageScreen() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className={cn(
+              "flex items-center justify-between p-4 rounded-lg",
+              isCritical ? "bg-esi-1-bg" : "bg-muted"
+            )}>
               <span className="font-medium">Final ESI Level</span>
               {selectedESI && <ESIBadge level={selectedESI} size="md" showLabel />}
             </div>
@@ -402,7 +455,7 @@ export default function TriageScreen() {
             )}
 
             {selectedESI && selectedESI <= 2 && (
-              <div className="flex items-center gap-2 p-3 bg-esi-2-bg rounded-lg text-sm">
+              <div className="flex items-center gap-2 p-3 bg-esi-2-bg rounded-lg text-sm border border-[hsl(var(--esi-2-border))]">
                 <AlertTriangle className="h-4 w-4 text-esi-2" />
                 <span>High-acuity case will be immediately routed to physician</span>
               </div>
@@ -413,7 +466,11 @@ export default function TriageScreen() {
             <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting}
+              className={cn(isCritical && "bg-esi-1 hover:bg-esi-1/90")}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
