@@ -90,6 +90,7 @@ interface EscalationCardProps {
   title: string;
   subtitle: string;
   patientName: string;
+  patientLocation: string;
   provider: string;
   timeLabel: string;
   onAction?: () => void;
@@ -101,6 +102,7 @@ function EscalationCard({
   title, 
   subtitle, 
   patientName, 
+  patientLocation,
   provider,
   timeLabel,
   onAction,
@@ -136,7 +138,7 @@ function EscalationCard({
       </div>
       <p className="text-[10px] text-muted-foreground mb-2">{subtitle}</p>
       <div className="text-xs space-y-0.5 mb-3">
-        <p>Patient: <span className="font-medium">{patientName} ({location})</span></p>
+        <p>Patient: <span className="font-medium">{patientName} ({patientLocation})</span></p>
         <p>Provider: <span className="text-muted-foreground">{provider}</span></p>
       </div>
       <Button 
@@ -379,7 +381,8 @@ export default function NurseDashboard() {
               type="critical"
               title="Stat Lab Results"
               subtitle="Critical Troponin"
-              patientName="DOE, JOHN (Bed 04)"
+              patientName="DOE, JOHN"
+              patientLocation="Bed 04"
               provider="Dr. Smith (Unacknowledged)"
               timeLabel="12m OVER"
               actionLabel="NOTIFY PROVIDER"
@@ -388,7 +391,8 @@ export default function NurseDashboard() {
               type="warning"
               title="Unsigned Orders"
               subtitle="Pain Medication (PRN)"
-              patientName="SMITH, JANE (Bed 09)"
+              patientName="SMITH, JANE"
+              patientLocation="Bed 09"
               provider="Dr. Lee (Unacknowledged)"
               timeLabel="8m OVER"
               actionLabel="NOTIFY PROVIDER"
@@ -397,7 +401,8 @@ export default function NurseDashboard() {
               type="info"
               title="Triage Alert"
               subtitle="Wait Time Threshold"
-              patientName="WILSON, SARAH (Waiting Room)"
+              patientName="WILSON, SARAH"
+              patientLocation="Waiting Room"
               provider="ESI 4 • Total Wait: 1h 15m"
               timeLabel="2m AGO"
               actionLabel="ASSIGN BED"
