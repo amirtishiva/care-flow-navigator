@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { usePhysicianSettings } from '@/integrations/supabase/hooks/usePhysicianSettings';
 import { 
   Bell, 
   Clock, 
@@ -15,35 +16,31 @@ import {
   AlertTriangle,
   Info,
   Database,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
+  const { settings, updateSetting, saveSettings, resetSettings, hasChanges } = usePhysicianSettings();
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Settings state
-  const [settings, setSettings] = useState({
-    pushAlertsEnabled: true,
-    silentRoutingEnabled: true,
-    soundAlertsEnabled: true,
-    esi1Timeout: 2,
-    esi2Timeout: 5,
-    aiDraftingEnabled: true,
-    showConfidenceIndicators: true,
-    generateSBARSummaries: true,
-  });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate save
-    setTimeout(() => {
-      setIsSaving(false);
+    const success = await saveSettings();
+    setIsSaving(false);
+    
+    if (success) {
       toast.success('Settings saved successfully');
-    }, 1000);
+    } else {
+      toast.error('Failed to save settings');
+    }
   };
 
-  const hasChanges = true; // In real app, compare with initial state
+  const handleReset = () => {
+    resetSettings();
+    toast.success('Settings reset to defaults');
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
@@ -65,7 +62,7 @@ export default function Settings() {
               </div>
               <div>
                 <p className="font-medium">All Systems Operational</p>
-                <p className="text-sm text-muted-foreground">FHIR connection active • AI models healthy</p>
+                <p className="text-sm text-muted-foreground">Backend connection active • AI models healthy</p>
               </div>
             </div>
             <Badge className="bg-confidence-high">Online</Badge>
@@ -95,7 +92,7 @@ export default function Settings() {
             <Switch 
               id="push-alerts"
               checked={settings.pushAlertsEnabled}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, pushAlertsEnabled: checked }))}
+              onCheckedChange={(checked) => updateSetting('pushAlertsEnabled', checked)}
             />
           </div>
           
@@ -111,7 +108,7 @@ export default function Settings() {
             <Switch 
               id="silent-routing"
               checked={settings.silentRoutingEnabled}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, silentRoutingEnabled: checked }))}
+              onCheckedChange={(checked) => updateSetting('silentRoutingEnabled', checked)}
             />
           </div>
           
@@ -127,7 +124,7 @@ export default function Settings() {
             <Switch 
               id="sound-alerts"
               checked={settings.soundAlertsEnabled}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, soundAlertsEnabled: checked }))}
+              onCheckedChange={(checked) => updateSetting('soundAlertsEnabled', checked)}
             />
           </div>
         </CardContent>
@@ -153,7 +150,7 @@ export default function Settings() {
                   id="esi1-timeout"
                   type="number" 
                   value={settings.esi1Timeout}
-                  onChange={(e) => setSettings(s => ({ ...s, esi1Timeout: +e.target.value }))}
+                  onChange={(e) => updateSetting('esi1Timeout', +e.target.value)}
                   className="w-20 font-vitals" 
                   min={1}
                   max={10}
@@ -168,7 +165,7 @@ export default function Settings() {
                   id="esi2-timeout"
                   type="number" 
                   value={settings.esi2Timeout}
-                  onChange={(e) => setSettings(s => ({ ...s, esi2Timeout: +e.target.value }))}
+                  onChange={(e) => updateSetting('esi2Timeout', +e.target.value)}
                   className="w-20 font-vitals" 
                   min={1}
                   max={15}
@@ -210,7 +207,7 @@ export default function Settings() {
             <Switch 
               id="ai-drafting"
               checked={settings.aiDraftingEnabled}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, aiDraftingEnabled: checked }))}
+              onCheckedChange={(checked) => updateSetting('aiDraftingEnabled', checked)}
             />
           </div>
           
@@ -226,7 +223,7 @@ export default function Settings() {
             <Switch 
               id="confidence-indicators"
               checked={settings.showConfidenceIndicators}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, showConfidenceIndicators: checked }))}
+              onCheckedChange={(checked) => updateSetting('showConfidenceIndicators', checked)}
             />
           </div>
           
@@ -242,7 +239,7 @@ export default function Settings() {
             <Switch 
               id="sbar-summaries"
               checked={settings.generateSBARSummaries}
-              onCheckedChange={(checked) => setSettings(s => ({ ...s, generateSBARSummaries: checked }))}
+              onCheckedChange={(checked) => updateSetting('generateSBARSummaries', checked)}
             />
           </div>
 
@@ -264,7 +261,7 @@ export default function Settings() {
             Integration Status
           </CardTitle>
           <CardDescription>
-            SMART on FHIR and external system connections
+            Backend and external system connections
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -272,8 +269,8 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <Database className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">FHIR Server</p>
-                <p className="text-xs text-muted-foreground">https://fhir.hospital.example/r4</p>
+                <p className="font-medium">Database</p>
+                <p className="text-xs text-muted-foreground">Lovable Cloud PostgreSQL</p>
               </div>
             </div>
             <Badge className="bg-confidence-high">Connected</Badge>
@@ -283,8 +280,8 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <Server className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">EHR Integration</p>
-                <p className="text-xs text-muted-foreground">SMART on FHIR v2.0</p>
+                <p className="font-medium">Real-time Updates</p>
+                <p className="text-xs text-muted-foreground">WebSocket Connection</p>
               </div>
             </div>
             <Badge className="bg-confidence-high">Active</Badge>
@@ -294,19 +291,8 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <Shield className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Clinical Extraction Model</p>
-                <p className="text-xs text-muted-foreground">Gemini Pro (LLM)</p>
-              </div>
-            </div>
-            <Badge className="bg-confidence-high">Healthy</Badge>
-          </div>
-          
-          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-            <div className="flex items-center gap-3">
-              <Shield className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Acuity Scoring Model</p>
-                <p className="text-xs text-muted-foreground">XGBoost Classifier v2.1</p>
+                <p className="font-medium">Clinical AI Model</p>
+                <p className="text-xs text-muted-foreground">Gemini 2.0 Flash</p>
               </div>
             </div>
             <Badge className="bg-confidence-high">Healthy</Badge>
@@ -315,7 +301,14 @@ export default function Settings() {
       </Card>
 
       {/* Save Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Button 
+          variant="outline"
+          onClick={handleReset}
+        >
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Reset to Defaults
+        </Button>
         <Button 
           size="lg" 
           onClick={handleSave}

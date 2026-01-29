@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +27,7 @@ import { VitalsDisplay } from '@/components/triage/VitalsDisplay';
 import { SBARDisplay } from '@/components/triage/SBARDisplay';
 import { useEmergency } from '@/contexts/EmergencyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTrackBoard, useAcknowledgeCase, TrackBoardCase } from '@/integrations/supabase/hooks';
+import { useTrackBoard, useAcknowledgeCase, TrackBoardCase, useLatestVitals } from '@/integrations/supabase/hooks';
 import { ESILevel, ESI_RESPONSE_TIMES, VitalSigns, SBARSummary } from '@/types/triage';
 import { 
   Search, 
@@ -39,12 +40,48 @@ import {
   ChevronUp,
   ExternalLink,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  RotateCw,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+// Component for fetching vitals in dialog
+function CaseVitals({ patientId }: { patientId: string }) {
+  const { data: vitals, isLoading } = useLatestVitals(patientId);
+  
+  if (isLoading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+  
+  if (!vitals) {
+    return (
+      <div className="p-3 bg-muted/30 rounded-lg text-center text-muted-foreground text-sm">
+        No vital signs recorded
+      </div>
+    );
+  }
+  
+  const formattedVitals: VitalSigns = {
+    heartRate: vitals.heart_rate || 0,
+    bloodPressure: { 
+      systolic: vitals.systolic_bp || 0, 
+      diastolic: vitals.diastolic_bp || 0 
+    },
+    respiratoryRate: vitals.respiratory_rate || 0,
+    temperature: vitals.temperature ? Number(vitals.temperature) : 0,
+    oxygenSaturation: vitals.oxygen_saturation || 0,
+    painLevel: vitals.pain_level || 0,
+    timestamp: new Date(vitals.recorded_at),
+  };
+  
+  return <VitalsDisplay vitals={formattedVitals} layout="compact" />;
+}
+
 export default function TrackBoard() {
+  const location = useLocation();
+  const isMyPatientsView = location.pathname.includes('my-patients');
   const { user, session } = useAuth();
   const { activateEmergencyMode, deactivateEmergencyMode, checkCriticalState } = useEmergency();
   const acknowledgeMutation = useAcknowledgeCase();
@@ -62,9 +99,14 @@ export default function TrackBoard() {
     session, // Pass session to enable the query only when authenticated
   });
 
-  // Filter and sort cases client-side for search
+  // Filter and sort cases client-side for search and "My Patients" view
   const filteredCases = (trackBoardData?.cases || [])
     .filter(c => {
+      // For "My Patients" view, filter to cases assigned to current user
+      if (isMyPatientsView && user) {
+        if (c.assignedTo !== user.id) return false;
+      }
+      
       if (!searchQuery) return true;
       const name = `${c.patient.firstName} ${c.patient.lastName}`.toLowerCase();
       return name.includes(searchQuery.toLowerCase()) || 
@@ -143,9 +185,14 @@ export default function TrackBoard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Physician Track Board</h1>
+          <h1 className="text-2xl font-bold">
+            {isMyPatientsView ? 'My Patients' : 'Physician Track Board'}
+          </h1>
           <p className="text-muted-foreground">
-            Manage and acknowledge patient cases by priority
+            {isMyPatientsView 
+              ? 'Cases assigned to you for treatment'
+              : 'Manage and acknowledge patient cases by priority'
+            }
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -158,10 +205,18 @@ export default function TrackBoard() {
             <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
             Refresh
           </Button>
-          <Badge variant="outline" className="gap-2 py-1.5">
-            <Bell className="h-3.5 w-3.5" />
-            {pendingCount} Pending
-          </Badge>
+          {isMyPatientsView && (
+            <Badge variant="outline" className="gap-2 py-1.5">
+              <User className="h-3.5 w-3.5" />
+              {filteredCases.length} Assigned
+            </Badge>
+          )}
+          {!isMyPatientsView && (
+            <Badge variant="outline" className="gap-2 py-1.5">
+              <Bell className="h-3.5 w-3.5" />
+              {pendingCount} Pending
+            </Badge>
+          )}
           {overdueCount > 0 && (
             <Badge variant="destructive" className="gap-2 py-1.5">
               <Clock className="h-3.5 w-3.5" />
@@ -382,11 +437,17 @@ export default function TrackBoard() {
 
       {/* Summary Stats */}
       {trackBoardData?.summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="clinical-card p-4">
             <p className="text-sm text-muted-foreground">Total Cases</p>
-            <p className="text-2xl font-bold">{trackBoardData.summary.total}</p>
+            <p className="text-2xl font-bold">{filteredCases.length}</p>
           </Card>
+          {criticalCount > 0 && (
+            <Card className="clinical-card p-4 border-esi-1/30 bg-esi-1/5">
+              <p className="text-sm text-esi-1">ESI 1-2 (Critical)</p>
+              <p className="text-2xl font-bold text-esi-1">{criticalCount}</p>
+            </Card>
+          )}
           <Card className="clinical-card p-4">
             <p className="text-sm text-muted-foreground">ESI 3</p>
             <p className="text-2xl font-bold">{trackBoardData.summary.byESI[3] || 0}</p>
@@ -463,6 +524,12 @@ export default function TrackBoard() {
                       <span className="font-semibold">Chief Complaint: </span>
                       {selectedCase.patient.chiefComplaint}
                     </p>
+                  </div>
+
+                  {/* Vitals */}
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Vital Signs</h4>
+                    <CaseVitals patientId={selectedCase.patientId} />
                   </div>
 
                   {/* SBAR */}
