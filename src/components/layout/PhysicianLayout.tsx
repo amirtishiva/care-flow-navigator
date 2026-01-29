@@ -31,6 +31,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCriticalAlerts } from '@/integrations/supabase/hooks/useCriticalAlerts';
+import { useRealtimeAlerts } from '@/integrations/supabase/hooks/useRealtimeAlerts';
+import { toast } from 'sonner';
 
 const physicianNavItems = [
   { title: 'Track Board', url: '/physician', icon: ClipboardList },
@@ -174,8 +177,12 @@ function PhysicianSidebar() {
 }
 
 function PhysicianHeader() {
-  const [criticalCount] = useState(1);
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const { data: criticalData } = useCriticalAlerts({ session });
+  const criticalCount = criticalData?.count || 0;
+
+  // Real-time alerts - hook handles toasts internally
+  useRealtimeAlerts(user?.id);
 
   // Get user initials from email
   const userInitials = user?.email 
@@ -195,7 +202,7 @@ function PhysicianHeader() {
       <div className="flex items-center gap-4">
         {/* Critical Cases Alert */}
         {criticalCount > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-esi-1/10 border border-esi-1/30">
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-esi-1/10 border border-esi-1/30 animate-pulse">
             <AlertTriangle className="h-4 w-4 text-esi-1" />
             <span className="text-sm font-medium text-esi-1">{criticalCount} Critical</span>
           </div>

@@ -88,12 +88,11 @@ Deno.serve(async (req) => {
       .not('validated_esi', 'is', null)
       .in('status', ['validated', 'assigned', 'acknowledged', 'in_treatment'])
 
-    // Apply ESI filter - default to ESI 3-5 for track board
+    // Apply ESI filter - show all ESI levels by default (1-5)
     if (filters.esiLevels && filters.esiLevels.length > 0) {
       query = query.in('validated_esi', filters.esiLevels.map(String))
-    } else {
-      query = query.in('validated_esi', ['3', '4', '5'])
     }
+    // No default ESI filter - show all levels including critical ESI 1-2
 
     // Apply zone filter
     if (filters.zones && filters.zones.length > 0) {
