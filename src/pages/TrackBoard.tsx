@@ -331,14 +331,14 @@ export default function TrackBoard() {
                 {/* Vitals */}
                 <div>
                   <h4 className="text-sm font-medium mb-2">Vital Signs</h4>
-                  <VitalsDisplay vitals={selectedCase.patient.vitals} compact />
+                  <VitalsDisplay vitals={selectedCase.patient.vitals} layout="compact" />
                 </div>
 
                 {/* SBAR */}
                 {selectedCase.aiResult && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">SBAR Summary</h4>
-                    <SBARDisplay sbar={selectedCase.aiResult.sbar} compact />
+                    <SBARDisplay sbar={selectedCase.aiResult.sbar} layout="compact" />
                   </div>
                 )}
 
