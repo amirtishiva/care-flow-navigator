@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
 import { 
   Select, 
   SelectContent, 
@@ -23,10 +24,12 @@ import {
   AlertTriangle,
   Loader2,
   X,
-  File
+  File,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VitalSigns } from '@/types/triage';
+import { toast } from 'sonner';
 
 interface UploadedFile {
   id: string;
@@ -35,12 +38,23 @@ interface UploadedFile {
   size: number;
 }
 
+interface FormErrors {
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  chiefComplaint?: string;
+}
+
 export default function PatientIntakePage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<'demographics' | 'vitals' | 'complaint' | 'documents'>('demographics');
   const [isSearching, setIsSearching] = useState(false);
   const [patientFound, setPatientFound] = useState(false);
+  const [patientNotFound, setPatientNotFound] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -65,15 +79,50 @@ export default function PatientIntakePage() {
     timestamp: new Date(),
   });
 
+  // Validation functions
+  const validateDemographics = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    }
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Date of birth is required';
+    }
+    if (!formData.gender) {
+      newErrors.gender = 'Gender is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateComplaint = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    if (!formData.chiefComplaint.trim()) {
+      newErrors.chiefComplaint = 'Chief complaint is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleMRNSearch = () => {
     if (!formData.mrn) return;
     setIsSearching(true);
+    setPatientNotFound(false);
+    setPatientFound(false);
     
     // Simulate search
     setTimeout(() => {
       setIsSearching(false);
       if (formData.mrn === 'MRN-2024-002') {
         setPatientFound(true);
+        setPatientNotFound(false);
         setFormData(prev => ({
           ...prev,
           firstName: 'Sarah',
@@ -84,6 +133,10 @@ export default function PatientIntakePage() {
           medications: 'Albuterol inhaler, Fluticasone',
           medicalHistory: 'Asthma - severe persistent',
         }));
+        setErrors({});
+      } else {
+        setPatientNotFound(true);
+        setPatientFound(false);
       }
     }, 1000);
   };
@@ -106,9 +159,30 @@ export default function PatientIntakePage() {
     setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
+  const handleContinueToDemographics = () => {
+    if (validateDemographics()) {
+      setStep('vitals');
+    }
+  };
+
+  const handleContinueToComplaint = () => {
+    setStep('complaint');
+  };
+
+  const handleContinueToDocuments = () => {
+    if (validateComplaint()) {
+      setStep('documents');
+    }
+  };
+
   const handleStartTriage = () => {
-    // In a real app, this would save the patient and navigate to triage
-    navigate('/triage/new-patient');
+    setIsSubmitting(true);
+    // Simulate saving
+    setTimeout(() => {
+      setIsSubmitting(false);
+      toast.success('Patient registered successfully');
+      navigate('/triage/new-patient');
+    }, 1000);
   };
 
   const steps = [
@@ -120,11 +194,25 @@ export default function PatientIntakePage() {
 
   const currentStepIndex = steps.findIndex(s => s.id === step);
 
+  // Check if any vital has been entered
+  const hasAnyVital = vitals.heartRate > 0 || 
+    vitals.bloodPressure.systolic > 0 || 
+    vitals.bloodPressure.diastolic > 0 ||
+    vitals.respiratoryRate > 0 ||
+    vitals.temperature > 0 ||
+    vitals.oxygenSaturation > 0 ||
+    vitals.painLevel > 0;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -149,7 +237,9 @@ export default function PatientIntakePage() {
             <button
               key={s.id}
               onClick={() => i <= currentStepIndex && setStep(s.id as typeof step)}
-              className="flex flex-col items-center gap-2 z-10"
+              className="flex flex-col items-center gap-2 z-10 focus-ring rounded-lg p-1"
+              aria-label={`Step ${i + 1}: ${s.label}`}
+              aria-current={isActive ? 'step' : undefined}
             >
               <div className={cn(
                 'w-10 h-10 rounded-full flex items-center justify-center transition-all',
@@ -187,9 +277,13 @@ export default function PatientIntakePage() {
                 </Label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter MRN..."
+                    placeholder="Enter MRN... (try MRN-2024-002)"
                     value={formData.mrn}
-                    onChange={(e) => setFormData(prev => ({ ...prev, mrn: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, mrn: e.target.value }));
+                      setPatientNotFound(false);
+                      setPatientFound(false);
+                    }}
                     className="max-w-xs"
                   />
                   <Button 
@@ -211,6 +305,12 @@ export default function PatientIntakePage() {
                     Patient found - data auto-populated
                   </div>
                 )}
+                {patientNotFound && (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertCircle className="h-4 w-4" />
+                    No patient found with this MRN. Please enter details manually.
+                  </div>
+                )}
               </div>
 
               {/* Patient Info Form */}
@@ -220,18 +320,42 @@ export default function PatientIntakePage() {
                   <Input
                     id="firstName"
                     value={formData.firstName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, firstName: e.target.value }));
+                      if (errors.firstName) setErrors(prev => ({ ...prev, firstName: undefined }));
+                    }}
                     placeholder="Enter first name"
+                    className={cn(errors.firstName && "border-destructive")}
+                    aria-invalid={!!errors.firstName}
+                    aria-describedby={errors.firstName ? "firstName-error" : undefined}
                   />
+                  {errors.firstName && (
+                    <p id="firstName-error" className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.firstName}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name *</Label>
                   <Input
                     id="lastName"
                     value={formData.lastName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, lastName: e.target.value }));
+                      if (errors.lastName) setErrors(prev => ({ ...prev, lastName: undefined }));
+                    }}
                     placeholder="Enter last name"
+                    className={cn(errors.lastName && "border-destructive")}
+                    aria-invalid={!!errors.lastName}
+                    aria-describedby={errors.lastName ? "lastName-error" : undefined}
                   />
+                  {errors.lastName && (
+                    <p id="lastName-error" className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.lastName}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dob">Date of Birth *</Label>
@@ -239,16 +363,36 @@ export default function PatientIntakePage() {
                     id="dob"
                     type="date"
                     value={formData.dateOfBirth}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }));
+                      if (errors.dateOfBirth) setErrors(prev => ({ ...prev, dateOfBirth: undefined }));
+                    }}
+                    className={cn("font-vitals", errors.dateOfBirth && "border-destructive")}
+                    aria-invalid={!!errors.dateOfBirth}
+                    aria-describedby={errors.dateOfBirth ? "dob-error" : undefined}
                   />
+                  {errors.dateOfBirth && (
+                    <p id="dob-error" className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.dateOfBirth}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gender">Gender *</Label>
                   <Select 
                     value={formData.gender} 
-                    onValueChange={(v) => setFormData(prev => ({ ...prev, gender: v }))}
+                    onValueChange={(v) => {
+                      setFormData(prev => ({ ...prev, gender: v }));
+                      if (errors.gender) setErrors(prev => ({ ...prev, gender: undefined }));
+                    }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger 
+                      id="gender"
+                      className={cn(errors.gender && "border-destructive")}
+                      aria-invalid={!!errors.gender}
+                      aria-describedby={errors.gender ? "gender-error" : undefined}
+                    >
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
                     <SelectContent>
@@ -257,6 +401,12 @@ export default function PatientIntakePage() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.gender && (
+                    <p id="gender-error" className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.gender}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -273,7 +423,7 @@ export default function PatientIntakePage() {
 
               {/* Navigation */}
               <div className="flex justify-end">
-                <Button onClick={() => setStep('vitals')}>
+                <Button onClick={handleContinueToDemographics}>
                   Continue to Vitals
                 </Button>
               </div>
@@ -285,8 +435,9 @@ export default function PatientIntakePage() {
             <div className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Heart Rate (bpm)</Label>
+                  <Label htmlFor="heartRate">Heart Rate (bpm)</Label>
                   <Input
+                    id="heartRate"
                     type="number"
                     value={vitals.heartRate || ''}
                     onChange={(e) => setVitals(prev => ({ ...prev, heartRate: +e.target.value }))}
@@ -295,8 +446,9 @@ export default function PatientIntakePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Systolic BP (mmHg)</Label>
+                  <Label htmlFor="systolic">Systolic BP (mmHg)</Label>
                   <Input
+                    id="systolic"
                     type="number"
                     value={vitals.bloodPressure.systolic || ''}
                     onChange={(e) => setVitals(prev => ({ 
@@ -308,8 +460,9 @@ export default function PatientIntakePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Diastolic BP (mmHg)</Label>
+                  <Label htmlFor="diastolic">Diastolic BP (mmHg)</Label>
                   <Input
+                    id="diastolic"
                     type="number"
                     value={vitals.bloodPressure.diastolic || ''}
                     onChange={(e) => setVitals(prev => ({ 
@@ -321,8 +474,9 @@ export default function PatientIntakePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Respiratory Rate (/min)</Label>
+                  <Label htmlFor="respRate">Respiratory Rate (/min)</Label>
                   <Input
+                    id="respRate"
                     type="number"
                     value={vitals.respiratoryRate || ''}
                     onChange={(e) => setVitals(prev => ({ ...prev, respiratoryRate: +e.target.value }))}
@@ -331,8 +485,9 @@ export default function PatientIntakePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>SpO2 (%)</Label>
+                  <Label htmlFor="spo2">SpO2 (%)</Label>
                   <Input
+                    id="spo2"
                     type="number"
                     value={vitals.oxygenSaturation || ''}
                     onChange={(e) => setVitals(prev => ({ ...prev, oxygenSaturation: +e.target.value }))}
@@ -341,8 +496,9 @@ export default function PatientIntakePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Temperature (°F)</Label>
+                  <Label htmlFor="temp">Temperature (°F)</Label>
                   <Input
+                    id="temp"
                     type="number"
                     step="0.1"
                     value={vitals.temperature || ''}
@@ -353,30 +509,30 @@ export default function PatientIntakePage() {
                 </div>
               </div>
 
-              {/* Pain Level Slider */}
+              {/* Pain Level Slider - Using shadcn Slider */}
               <div className="space-y-3">
-                <Label>Pain Level (0-10)</Label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="0"
-                    max="10"
-                    value={vitals.painLevel}
-                    onChange={(e) => setVitals(prev => ({ ...prev, painLevel: +e.target.value }))}
-                    className="flex-1 h-2 rounded-full appearance-none bg-gradient-to-r from-confidence-high via-confidence-medium to-esi-1 cursor-pointer"
-                  />
-                  <span className="font-vitals text-2xl font-bold w-8 text-center">
+                <div className="flex items-center justify-between">
+                  <Label>Pain Level (0-10)</Label>
+                  <span className="font-vitals text-2xl font-bold">
                     {vitals.painLevel}
                   </span>
                 </div>
+                <Slider
+                  value={[vitals.painLevel]}
+                  onValueChange={([value]) => setVitals(prev => ({ ...prev, painLevel: value }))}
+                  max={10}
+                  step={1}
+                  className="w-full"
+                  aria-label="Pain level"
+                />
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>No Pain</span>
                   <span>Worst Pain</span>
                 </div>
               </div>
 
-              {/* Preview */}
-              {vitals.heartRate > 0 && (
+              {/* Preview - Show when ANY vital is entered */}
+              {hasAnyVital && (
                 <div className="p-4 bg-muted/30 rounded-lg">
                   <Label className="text-sm mb-3 block">Vitals Preview</Label>
                   <VitalsDisplay vitals={vitals} />
@@ -388,7 +544,7 @@ export default function PatientIntakePage() {
                 <Button variant="outline" onClick={() => setStep('demographics')}>
                   Back
                 </Button>
-                <Button onClick={() => setStep('complaint')}>
+                <Button onClick={handleContinueToComplaint}>
                   Continue to Chief Complaint
                 </Button>
               </div>
@@ -403,13 +559,26 @@ export default function PatientIntakePage() {
                 <Textarea
                   id="chiefComplaint"
                   value={formData.chiefComplaint}
-                  onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }));
+                    if (errors.chiefComplaint) setErrors(prev => ({ ...prev, chiefComplaint: undefined }));
+                  }}
                   placeholder="Describe the patient's primary reason for visit, symptoms, and relevant history..."
                   rows={4}
+                  className={cn(errors.chiefComplaint && "border-destructive")}
+                  aria-invalid={!!errors.chiefComplaint}
+                  aria-describedby={errors.chiefComplaint ? "complaint-error" : undefined}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Include onset, duration, severity, and any associated symptoms
-                </p>
+                {errors.chiefComplaint ? (
+                  <p id="complaint-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.chiefComplaint}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Include onset, duration, severity, and any associated symptoms
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -439,7 +608,7 @@ export default function PatientIntakePage() {
                 <Button variant="outline" onClick={() => setStep('vitals')}>
                   Back
                 </Button>
-                <Button onClick={() => setStep('documents')}>
+                <Button onClick={handleContinueToDocuments}>
                   Continue to Documents
                 </Button>
               </div>
@@ -449,7 +618,7 @@ export default function PatientIntakePage() {
           {/* Documents Step */}
           {step === 'documents' && (
             <div className="space-y-6">
-              <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
+              <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center focus-within:border-primary transition-colors">
                 <FileUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="font-medium mb-2">Upload Medical Documents</h3>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -462,6 +631,7 @@ export default function PatientIntakePage() {
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                     onChange={handleFileUpload}
                     className="hidden"
+                    aria-label="Upload files"
                   />
                   <Button variant="secondary" asChild>
                     <span>Choose Files</span>
@@ -491,6 +661,7 @@ export default function PatientIntakePage() {
                           size="icon" 
                           className="h-8 w-8"
                           onClick={() => removeFile(file.id)}
+                          aria-label={`Remove ${file.name}`}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -509,9 +680,23 @@ export default function PatientIntakePage() {
                 <Button variant="outline" onClick={() => setStep('complaint')}>
                   Back
                 </Button>
-                <Button onClick={handleStartTriage} size="lg" className="gap-2">
-                  Start AI Triage
-                  <CheckCircle2 className="h-4 w-4" />
+                <Button 
+                  onClick={handleStartTriage} 
+                  size="lg" 
+                  className="gap-2"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Start AI Triage
+                      <CheckCircle2 className="h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PatientCard } from '@/components/triage/PatientCard';
-import { mockPatients, mockTriageCases, getWaitingPatients } from '@/data/mockData';
-import { Patient, ESILevel } from '@/types/triage';
-import { Search, Users, Filter, Clock } from 'lucide-react';
+import { mockPatients, mockTriageCases } from '@/data/mockData';
+import { ESILevel } from '@/types/triage';
+import { Search, Users, Filter, Clock, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function PatientQueue() {
@@ -14,8 +14,6 @@ export default function PatientQueue() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'in-triage' | 'validated'>('all');
 
-  const waitingPatients = getWaitingPatients();
-  
   // Get all patients with their ESI levels from triage cases
   const patientsWithESI = mockPatients.map(patient => {
     const triageCase = mockTriageCases.find(c => c.patient.id === patient.id);
@@ -37,6 +35,11 @@ export default function PatientQueue() {
              patient.mrn.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
+  // Stats counts
+  const waitingCount = patientsWithESI.filter(p => p.patient.status === 'waiting').length;
+  const inTriageCount = patientsWithESI.filter(p => p.patient.status === 'in-triage').length;
+  const validatedCount = patientsWithESI.filter(p => p.patient.status === 'validated').length;
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Header */}
@@ -47,7 +50,8 @@ export default function PatientQueue() {
             All patients in the emergency department
           </p>
         </div>
-        <Button onClick={() => navigate('/intake')}>
+        <Button onClick={() => navigate('/intake')} className="gap-2">
+          <UserPlus className="h-4 w-4" />
           Add New Patient
         </Button>
       </div>
@@ -63,19 +67,21 @@ export default function PatientQueue() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
+                aria-label="Search patients"
               />
             </div>
 
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">Status:</span>
-              <div className="flex gap-1">
+              <div className="flex gap-1" role="group" aria-label="Filter by status">
                 {(['all', 'waiting', 'in-triage', 'validated'] as const).map((status) => (
                   <Button
                     key={status}
                     variant={statusFilter === status ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setStatusFilter(status)}
+                    aria-pressed={statusFilter === status}
                   >
                     {status === 'all' ? 'All' : 
                      status === 'waiting' ? 'Waiting' :
@@ -89,16 +95,14 @@ export default function PatientQueue() {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="clinical-card">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-status-pending/10">
               <Clock className="h-5 w-5 text-status-pending" />
             </div>
             <div>
-              <p className="text-2xl font-bold font-vitals">
-                {patientsWithESI.filter(p => p.patient.status === 'waiting').length}
-              </p>
+              <p className="text-2xl font-bold font-vitals">{waitingCount}</p>
               <p className="text-sm text-muted-foreground">Waiting</p>
             </div>
           </CardContent>
@@ -109,9 +113,7 @@ export default function PatientQueue() {
               <Users className="h-5 w-5 text-status-active" />
             </div>
             <div>
-              <p className="text-2xl font-bold font-vitals">
-                {patientsWithESI.filter(p => p.patient.status === 'in-triage').length}
-              </p>
+              <p className="text-2xl font-bold font-vitals">{inTriageCount}</p>
               <p className="text-sm text-muted-foreground">In Triage</p>
             </div>
           </CardContent>
@@ -122,9 +124,7 @@ export default function PatientQueue() {
               <Users className="h-5 w-5 text-status-completed" />
             </div>
             <div>
-              <p className="text-2xl font-bold font-vitals">
-                {patientsWithESI.filter(p => p.patient.status === 'validated').length}
-              </p>
+              <p className="text-2xl font-bold font-vitals">{validatedCount}</p>
               <p className="text-sm text-muted-foreground">Validated</p>
             </div>
           </CardContent>
@@ -137,7 +137,24 @@ export default function PatientQueue() {
           <Card className="clinical-card">
             <CardContent className="p-8 text-center">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">No patients match your filters</p>
+              <p className="text-muted-foreground">
+                {searchQuery || statusFilter !== 'all' 
+                  ? 'No patients match your search or filters. Try adjusting your criteria.'
+                  : 'No patients in the queue'}
+              </p>
+              {(searchQuery || statusFilter !== 'all') && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-4"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (

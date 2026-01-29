@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ESILevel, Alert } from '@/types/triage';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface StatCardProps {
   title: string;
@@ -68,39 +75,82 @@ function StatCard({ title, value, subtitle, icon, trend, variant = 'default' }: 
   );
 }
 
-function ActiveAlertBanner({ alerts }: { alerts: Alert[] }) {
+interface ActiveAlertBannerProps {
+  alerts: Alert[];
+  onViewAlerts: () => void;
+}
+
+function ActiveAlertBanner({ alerts, onViewAlerts }: ActiveAlertBannerProps) {
   const criticalAlerts = alerts.filter(a => a.esiLevel <= 2 && !a.acknowledgedAt);
 
   if (criticalAlerts.length === 0) return null;
 
   return (
-    <div className="bg-esi-1-bg border border-esi-1/30 rounded-lg p-4 animate-pulse-ring">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-esi-1/10">
-            <Bell className="h-5 w-5 text-esi-1" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-esi-1">
-              {criticalAlerts.length} Critical Alert{criticalAlerts.length > 1 ? 's' : ''} Pending
-            </h3>
-            <p className="text-sm text-foreground/70">
-              ESI Level 1-2 cases require immediate attention
-            </p>
-          </div>
-        </div>
-        <Button variant="destructive" size="sm" className="gap-2">
-          View Alerts
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+    <div className="alert-banner-critical pulse-critical">
+      <div className="p-2 rounded-full bg-esi-1/20">
+        <Bell className="h-5 w-5" />
       </div>
+      <div className="flex-1">
+        <h3 className="font-semibold">
+          {criticalAlerts.length} Critical Alert{criticalAlerts.length > 1 ? 's' : ''} Pending
+        </h3>
+        <p className="text-sm opacity-80">
+          ESI Level 1-2 cases require immediate attention
+        </p>
+      </div>
+      <Button 
+        variant="destructive" 
+        size="sm" 
+        className="gap-2"
+        onClick={onViewAlerts}
+      >
+        View Alerts
+        <ChevronRight className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
 
 function ESIDistribution() {
-  const distribution: Record<ESILevel, number> = { 1: 1, 2: 2, 3: 3, 4: 1, 5: 1 };
+  // Calculate actual distribution from mock data
+  const distribution = useMemo(() => {
+    const dist: Record<ESILevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    
+    mockTriageCases.forEach(triageCase => {
+      const esiLevel = triageCase.validation?.validatedESI || triageCase.aiResult?.draftESI;
+      if (esiLevel) {
+        dist[esiLevel]++;
+      }
+    });
+    
+    // Also count patients without triage cases
+    mockPatients.forEach(patient => {
+      const hasCase = mockTriageCases.some(c => c.patient.id === patient.id);
+      if (!hasCase && patient.status === 'waiting') {
+        // Count as unassigned (don't add to ESI counts)
+      }
+    });
+    
+    return dist;
+  }, []);
+
   const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+
+  if (total === 0) {
+    return (
+      <Card className="clinical-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Current ESI Distribution</CardTitle>
+          <CardDescription>Active cases by severity level</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No active cases
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="clinical-card">
@@ -112,7 +162,7 @@ function ESIDistribution() {
         <div className="space-y-3">
           {([1, 2, 3, 4, 5] as ESILevel[]).map((level) => {
             const count = distribution[level];
-            const percentage = (count / total) * 100;
+            const percentage = total > 0 ? (count / total) * 100 : 0;
             
             return (
               <div key={level} className="flex items-center gap-3">
@@ -147,6 +197,13 @@ export default function NurseDashboard() {
   const waitingPatients = getWaitingPatients();
   const inTriagePatients = getInTriagePatients();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showAlertsDialog, setShowAlertsDialog] = useState(false);
+
+  const criticalAlerts = mockAlerts.filter(a => a.esiLevel <= 2 && !a.acknowledgedAt);
+  const criticalCasesCount = mockTriageCases.filter(c => {
+    const esi = c.validation?.validatedESI || c.aiResult?.draftESI;
+    return esi && esi <= 2;
+  }).length;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -160,7 +217,7 @@ export default function NurseDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Nurse Dashboard</h1>
           <p className="text-muted-foreground">
-            {currentTime.toLocaleDateString('en-US', { 
+            {currentTime.toLocaleDateString(undefined, { 
               weekday: 'long', 
               year: 'numeric', 
               month: 'long', 
@@ -177,7 +234,10 @@ export default function NurseDashboard() {
       </div>
 
       {/* Active Alerts */}
-      <ActiveAlertBanner alerts={mockAlerts} />
+      <ActiveAlertBanner 
+        alerts={mockAlerts} 
+        onViewAlerts={() => setShowAlertsDialog(true)} 
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -202,10 +262,10 @@ export default function NurseDashboard() {
         />
         <StatCard
           title="Critical Cases"
-          value={2}
+          value={criticalCasesCount}
           subtitle="ESI 1-2 pending"
           icon={<AlertTriangle className="h-5 w-5" />}
-          variant="critical"
+          variant={criticalCasesCount > 0 ? "critical" : "default"}
         />
       </div>
 
@@ -298,6 +358,59 @@ export default function NurseDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Alerts Dialog */}
+      <Dialog open={showAlertsDialog} onOpenChange={setShowAlertsDialog}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-esi-1" />
+              Critical Alerts
+            </DialogTitle>
+            <DialogDescription>
+              ESI Level 1-2 cases requiring immediate attention
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            {criticalAlerts.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                No pending critical alerts
+              </p>
+            ) : (
+              criticalAlerts.map((alert) => (
+                <div 
+                  key={alert.id}
+                  className="p-4 rounded-lg border border-esi-1/30 bg-esi-1-bg"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <ESIBadge level={alert.esiLevel} size="sm" />
+                      <span className="font-medium">
+                        {alert.patient.lastName}, {alert.patient.firstName}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round((Date.now() - alert.createdAt.getTime()) / 60000)} min ago
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{alert.message}</p>
+                  <Button 
+                    size="sm" 
+                    className="w-full"
+                    onClick={() => {
+                      setShowAlertsDialog(false);
+                      navigate(`/triage/${alert.patient.id}`);
+                    }}
+                  >
+                    Review Case
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
