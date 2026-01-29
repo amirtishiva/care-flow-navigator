@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { InfluencingFactor } from '@/types/triage';
-import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Info, Sparkles } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -9,14 +9,16 @@ import {
 
 interface ConfidenceIndicatorProps {
   confidence: number;
-  factors: InfluencingFactor[];
+  factors?: InfluencingFactor[];
   showFactors?: boolean;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function ConfidenceIndicator({ 
   confidence, 
-  factors, 
-  showFactors = true 
+  factors = [], 
+  showFactors = true,
+  size = 'md'
 }: ConfidenceIndicatorProps) {
   const getConfidenceColor = () => {
     if (confidence >= 90) return 'bg-confidence-high';
@@ -25,59 +27,70 @@ export function ConfidenceIndicator({
   };
 
   const getConfidenceLabel = () => {
-    if (confidence >= 90) return 'High';
-    if (confidence >= 75) return 'Moderate';
-    return 'Low';
+    if (confidence >= 90) return { text: 'High', color: 'text-confidence-high bg-confidence-high/10 border-confidence-high/30' };
+    if (confidence >= 75) return { text: 'Medium', color: 'text-confidence-medium bg-confidence-medium/10 border-confidence-medium/30' };
+    return { text: 'Low', color: 'text-confidence-low bg-confidence-low/10 border-confidence-low/30' };
   };
+
+  const label = getConfidenceLabel();
 
   return (
     <div className="space-y-3">
-      {/* Confidence Bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium">AI Confidence</span>
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                'text-xs font-medium px-2 py-0.5 rounded-full',
-                confidence >= 90 ? 'bg-confidence-high/10 text-confidence-high' :
-                confidence >= 75 ? 'bg-confidence-medium/10 text-confidence-medium' :
-                'bg-confidence-low/10 text-confidence-low'
-              )}>
-                {getConfidenceLabel()}
-              </span>
-              <span className="font-vitals text-sm font-semibold">{confidence}%</span>
-            </div>
-          </div>
-          <div className="confidence-bar">
-            <div 
-              className={cn('confidence-fill', getConfidenceColor())}
-              style={{ width: `${confidence}%` }}
-            />
-          </div>
+      {/* Confidence Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className={cn(
+            'font-medium',
+            size === 'sm' && 'text-xs',
+            size === 'md' && 'text-sm',
+            size === 'lg' && 'text-base'
+          )}>
+            Model Confidence
+          </span>
         </div>
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            'px-2 py-0.5 rounded-full text-xs font-semibold border',
+            label.color
+          )}>
+            {label.text}
+          </span>
+          <span className="font-mono font-bold text-foreground">
+            {confidence}%
+          </span>
+        </div>
+      </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="p-1.5 rounded-full hover:bg-muted transition-colors">
-              <Info className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left" className="max-w-xs">
-            <p className="text-xs">
-              Confidence reflects how closely this case matches training patterns. 
-              Clinical judgment should always take precedence.
-            </p>
-          </TooltipContent>
-        </Tooltip>
+      {/* Progress Bar */}
+      <div className="confidence-bar">
+        <div 
+          className={cn('confidence-fill', getConfidenceColor())}
+          style={{ width: `${confidence}%` }}
+        />
       </div>
 
       {/* Influencing Factors */}
       {showFactors && factors.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Key Influencing Factors
-          </h4>
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Rationale Factors
+            </h4>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="p-1 rounded hover:bg-muted transition-colors">
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs">
+                  These factors influenced the AI's ESI recommendation. 
+                  Clinical judgment should always take precedence.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <div className="flex flex-wrap gap-2">
             {factors.map((factor, index) => (
               <FactorBadge key={index} factor={factor} />
@@ -96,9 +109,9 @@ function FactorBadge({ factor }: { factor: InfluencingFactor }) {
     neutral: Minus,
   }[factor.impact];
 
-  const impactColor = {
-    increases: 'text-esi-2 bg-esi-2-bg border-esi-2/20',
-    decreases: 'text-esi-4 bg-esi-4-bg border-esi-4/20',
+  const impactStyles = {
+    increases: 'text-esi-2 bg-esi-2-bg border-esi-2-border',
+    decreases: 'text-esi-4 bg-esi-4-bg border-esi-4-border',
     neutral: 'text-muted-foreground bg-muted border-border',
   }[factor.impact];
 
@@ -106,7 +119,7 @@ function FactorBadge({ factor }: { factor: InfluencingFactor }) {
     vital: 'Vital',
     symptom: 'Symptom',
     history: 'History',
-    age: 'Demographic',
+    age: 'Demo',
     other: 'Other',
   }[factor.category];
 
@@ -114,20 +127,43 @@ function FactorBadge({ factor }: { factor: InfluencingFactor }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div className={cn(
-          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium cursor-help',
-          impactColor
+          'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium cursor-help transition-colors hover:opacity-80',
+          impactStyles
         )}>
           <ImpactIcon className="h-3 w-3" />
           <span>{factor.factor}</span>
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        <p className="text-xs">
-          <span className="font-medium">{categoryLabel}:</span> {factor.impact === 'increases' ? 'Increases' : factor.impact === 'decreases' ? 'Decreases' : 'No impact on'} acuity score
-          <br />
-          <span className="opacity-70">Weight: {(factor.weight * 100).toFixed(0)}%</span>
-        </p>
+        <div className="text-xs space-y-1">
+          <p className="font-medium">{categoryLabel} Factor</p>
+          <p className="text-muted-foreground">
+            {factor.impact === 'increases' ? 'Increases' : factor.impact === 'decreases' ? 'Decreases' : 'Neutral impact on'} severity
+          </p>
+          <p className="text-muted-foreground">
+            Weight: {(factor.weight * 100).toFixed(0)}%
+          </p>
+        </div>
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+// Compact badge for confidence display
+export function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const getStyle = () => {
+    if (confidence >= 90) return 'bg-confidence-high/10 text-confidence-high border-confidence-high/30';
+    if (confidence >= 75) return 'bg-confidence-medium/10 text-confidence-medium border-confidence-medium/30';
+    return 'bg-confidence-low/10 text-confidence-low border-confidence-low/30';
+  };
+
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold font-mono',
+      getStyle()
+    )}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {confidence}%
+    </span>
   );
 }
