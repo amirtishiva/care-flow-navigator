@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +61,45 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // ESI Severity Levels
+        esi: {
+          1: "hsl(var(--esi-1))",
+          "1-bg": "hsl(var(--esi-1-bg))",
+          2: "hsl(var(--esi-2))",
+          "2-bg": "hsl(var(--esi-2-bg))",
+          3: "hsl(var(--esi-3))",
+          "3-bg": "hsl(var(--esi-3-bg))",
+          4: "hsl(var(--esi-4))",
+          "4-bg": "hsl(var(--esi-4-bg))",
+          5: "hsl(var(--esi-5))",
+          "5-bg": "hsl(var(--esi-5-bg))",
+        },
+        // Status Colors
+        status: {
+          pending: "hsl(var(--status-pending))",
+          active: "hsl(var(--status-active))",
+          completed: "hsl(var(--status-completed))",
+          escalated: "hsl(var(--status-escalated))",
+        },
+        // Confidence
+        confidence: {
+          high: "hsl(var(--confidence-high))",
+          medium: "hsl(var(--confidence-medium))",
+          low: "hsl(var(--confidence-low))",
+        },
+        // SBAR
+        sbar: {
+          situation: "hsl(var(--sbar-situation))",
+          background: "hsl(var(--sbar-background))",
+          assessment: "hsl(var(--sbar-assessment))",
+          recommendation: "hsl(var(--sbar-recommendation))",
+        },
+        // Vitals
+        vitals: {
+          normal: "hsl(var(--vitals-normal))",
+          warning: "hsl(var(--vitals-warning))",
+          critical: "hsl(var(--vitals-critical))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +108,33 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "pulse-ring": {
+          "0%": { transform: "scale(0.95)", opacity: "1" },
+          "50%": { transform: "scale(1.05)", opacity: "0.8" },
+          "100%": { transform: "scale(0.95)", opacity: "1" },
+        },
+        "slide-in-right": {
+          "0%": { transform: "translateX(100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        "fade-in-up": {
+          "0%": { transform: "translateY(10px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-ring": "pulse-ring 2s ease-in-out infinite",
+        "slide-in-right": "slide-in-right 0.3s ease-out",
+        "fade-in-up": "fade-in-up 0.3s ease-out",
       },
     },
   },
