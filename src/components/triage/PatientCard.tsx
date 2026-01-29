@@ -4,8 +4,6 @@ import { VitalsBar } from './VitalsDisplay';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  Clock, 
-  User, 
   AlertTriangle, 
   ChevronRight,
   MapPin
@@ -25,15 +23,15 @@ interface PatientCardProps {
   compact?: boolean;
 }
 
-const statusConfig: Record<PatientStatus, { label: string; dotColor: string }> = {
-  'waiting': { label: 'Waiting', dotColor: 'bg-status-pending' },
-  'in-triage': { label: 'In Triage', dotColor: 'bg-status-active' },
-  'pending-validation': { label: 'Pending', dotColor: 'bg-status-pending' },
-  'validated': { label: 'Validated', dotColor: 'bg-status-completed' },
-  'assigned': { label: 'Assigned', dotColor: 'bg-status-active' },
-  'acknowledged': { label: 'Ack\'d', dotColor: 'bg-status-completed' },
-  'in-treatment': { label: 'Treating', dotColor: 'bg-primary' },
-  'discharged': { label: 'Discharged', dotColor: 'bg-muted-foreground' },
+const statusConfig: Record<PatientStatus, { label: string; dotClass: string }> = {
+  'waiting': { label: 'Waiting', dotClass: 'bg-[hsl(var(--status-pending))]' },
+  'in-triage': { label: 'In Triage', dotClass: 'bg-[hsl(var(--status-active))]' },
+  'pending-validation': { label: 'Pending', dotClass: 'bg-[hsl(var(--status-pending))]' },
+  'validated': { label: 'Validated', dotClass: 'bg-[hsl(var(--status-completed))]' },
+  'assigned': { label: 'Assigned', dotClass: 'bg-[hsl(var(--status-active))]' },
+  'acknowledged': { label: 'Ack\'d', dotClass: 'bg-[hsl(var(--status-completed))]' },
+  'in-treatment': { label: 'Treating', dotClass: 'bg-primary' },
+  'discharged': { label: 'Discharged', dotClass: 'bg-muted-foreground' },
 };
 
 export function PatientCard({ 
@@ -55,12 +53,12 @@ export function PatientCard({
     return (
       <div 
         className={cn(
-          'flex items-center gap-3 p-3 rounded-lg border bg-card/50 hover:bg-card transition-all cursor-pointer',
-          isCritical && 'border-l-2 border-l-esi-1 bg-esi-1-bg/30'
+          'flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 hover:bg-card transition-colors cursor-pointer',
+          isCritical && 'border-l-2 border-l-[hsl(var(--esi-1))] bg-[hsl(var(--esi-1-bg)/0.3)]'
         )}
         onClick={onClick}
       >
-        <div className={cn('w-2 h-2 rounded-full', statusInfo.dotColor)} />
+        <div className={cn('status-dot', statusInfo.dotClass)} />
         {esiLevel && <ESIBadge level={esiLevel} size="xs" />}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">
@@ -73,7 +71,7 @@ export function PatientCard({
         <div className="text-right">
           <span className={cn(
             'font-vitals text-sm font-medium',
-            isCritical && 'text-esi-1'
+            isCritical && 'text-[hsl(var(--esi-1))]'
           )}>{waitTime}</span>
         </div>
       </div>
@@ -84,8 +82,8 @@ export function PatientCard({
     <div 
       className={cn(
         'clinical-card-interactive overflow-hidden',
-        isCritical && 'border-l-4 border-l-esi-1 bg-esi-1-bg/20',
-        esiLevel === 2 && 'border-l-4 border-l-esi-2',
+        isCritical && 'border-l-4 border-l-[hsl(var(--esi-1))] bg-[hsl(var(--esi-1-bg)/0.2)]',
+        esiLevel === 2 && !isCritical && 'border-l-4 border-l-[hsl(var(--esi-2))]',
       )}
       onClick={onClick}
     >
@@ -96,8 +94,8 @@ export function PatientCard({
             {/* Status + ESI */}
             <div className="flex items-center gap-2">
               <div className={cn(
-                'w-2.5 h-2.5 rounded-full',
-                statusInfo.dotColor,
+                'status-dot',
+                statusInfo.dotClass,
                 isCritical && 'animate-pulse'
               )} />
               {esiLevel && <ESIBadge level={esiLevel} size="sm" />}
@@ -129,7 +127,7 @@ export function PatientCard({
           <div className="flex flex-col items-end gap-1 shrink-0">
             <span className={cn(
               'font-vitals text-sm font-semibold',
-              isCritical && 'text-esi-1'
+              isCritical && 'text-[hsl(var(--esi-1))]'
             )}>
               {waitTime}
             </span>
@@ -151,7 +149,7 @@ export function PatientCard({
         {(patient.allergies?.length || showVitals) && (
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {patient.allergies && patient.allergies.length > 0 && (
-              <Badge variant="outline" className="gap-1 border-esi-2/30 text-esi-2 bg-esi-2-bg/30">
+              <Badge variant="outline" className="gap-1 border-[hsl(var(--esi-2)/0.3)] text-[hsl(var(--esi-2))] bg-[hsl(var(--esi-2-bg)/0.3)]">
                 <AlertTriangle className="h-3 w-3" />
                 {patient.allergies.join(', ')}
               </Badge>
