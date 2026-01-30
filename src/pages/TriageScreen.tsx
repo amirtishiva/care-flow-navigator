@@ -71,7 +71,8 @@ export default function TriageScreen() {
   const aiTriageMutation = useAITriage();
   const validateMutation = useValidateTriage();
 
-  const [isAnalyzing, setIsAnalyzing] = useState(true);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisTimeout, setAnalysisTimeout] = useState(false);
   const [aiResult, setAIResult] = useState<AITriageResult | null>(null);
   const [triageCaseId, setTriageCaseId] = useState<string | null>(null);
   const [selectedESI, setSelectedESI] = useState<ESILevel | null>(null);
@@ -194,8 +195,9 @@ export default function TriageScreen() {
     // Only run new analysis if no ANALYZED case exists
     // If a shell case exists (from intake), we will update it.
     if (patient && patientId && !aiResult && !aiTriageMutation.isPending && !isAnalyzing && !analyzedCase) {
-      // Double check we're not already analyzing to prevent loops
+      console.log('Triggering AI Analysis for patient:', patientId);
       setIsAnalyzing(true);
+      setAnalysisTimeout(false);
 
       const vitals = formatVitals();
       const age = calculateAge(patient.date_of_birth);
@@ -250,7 +252,26 @@ export default function TriageScreen() {
         },
       });
     }
-  }, [patient, patientId, latestVitals, existingCases]);
+  }, [patient, patientId, latestVitals, existingCases, aiResult, isAnalyzing]);
+
+  // Timeout handler for analysis
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isAnalyzing) {
+      timer = setTimeout(() => {
+        setAnalysisTimeout(true);
+      }, 15000); // 15 seconds threshold for "stuck" UI
+    } else {
+      setAnalysisTimeout(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isAnalyzing]);
+
+  const handleRetryAnalysis = () => {
+    setAIResult(null);
+    setIsAnalyzing(false);
+    setAnalysisTimeout(false);
+  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -528,9 +549,22 @@ export default function TriageScreen() {
                 Extracting clinical information, analyzing vitals, and generating
                 SBAR summary with ESI recommendation using Gemini AI...
               </p>
-              <div className="flex items-center gap-2 mt-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Processing patient data...
+              <div className="flex flex-col items-center gap-4 mt-6">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing patient data...
+                </div>
+                {analysisTimeout && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryAnalysis}
+                    className="animate-fade-in"
+                  >
+                    <History className="h-4 w-4 mr-2" />
+                    Retry Analysis
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>

@@ -128,10 +128,11 @@ Deno.serve(async (req) => {
     }
 
     const geminiData: GeminiResponse = await geminiResponse.json()
+    console.log('Gemini response received')
     const aiResponseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
 
     if (!aiResponseText) {
-      console.error('Empty response from Gemini')
+      console.error('Empty response from Gemini:', JSON.stringify(geminiData))
       return new Response(
         JSON.stringify({ error: 'AI returned empty response' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -141,7 +142,9 @@ Deno.serve(async (req) => {
     // Parse the structured AI response
     let aiResult
     try {
-      aiResult = JSON.parse(aiResponseText)
+      // Clean up potential markdown code blocks in Gemini response
+      const cleanJson = aiResponseText.replace(/```json\n?|\n?```/g, '').trim()
+      aiResult = JSON.parse(cleanJson)
     } catch (parseError) {
       console.error('Failed to parse AI response:', aiResponseText)
       return new Response(
